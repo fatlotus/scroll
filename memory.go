@@ -28,11 +28,7 @@ func (m *memLog) Cursor() Cursor {
 	return &memCursor{m, 0}
 }
 
-func (m *memLog) SetContext(c context.Context) error {
-	return nil
-}
-
-func (c *memCursor) Next(x interface{}) error {
+func (c *memCursor) Next(ctx context.Context, x interface{}) error {
 	m := c.Log
 	vx := reflect.ValueOf(x)
 	m.Lock()
@@ -53,7 +49,7 @@ func (c *memCursor) Next(x interface{}) error {
 	return Done
 }
 
-func (m *memLog) Append(x interface{}) error {
+func (m *memLog) Append(ctx context.Context, x interface{}) error {
 	m.Lock()
 	defer m.Unlock()
 

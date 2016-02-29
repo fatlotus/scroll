@@ -3,14 +3,15 @@ package scroll_test
 import (
 	"encoding/gob"
 	"fmt"
-	"github.com/uchicago-sg/scroll"
+	"github.com/fatlotus/scroll"
+	"golang.org/x/net/context"
 	"io/ioutil"
 	"os"
 )
 
-func read(c scroll.Cursor) {
+func read(ctx context.Context, c scroll.Cursor) {
 	var x Once
-	err := c.Next(&x)
+	err := c.Next(ctx, &x)
 	if err != nil {
 		fmt.Printf("err: %s\n", err)
 	} else {
@@ -25,17 +26,18 @@ func (o Once) Key() string { return string(o) }
 func ExampleMemoryLog() {
 	log := scroll.MemoryLog()
 	cursor := log.Cursor()
+	ctx := context.Background()
 
-	read(cursor)
-	log.Append(Once("peach"))
-	read(cursor)
+	read(ctx, cursor)
+	log.Append(ctx, Once("peach"))
+	read(ctx, cursor)
 
-	log.Append(Once("banana"))
-	log.Append(Once("pear"))
-	log.Append(Once("banana"))
-	read(cursor)
-	read(cursor)
-	read(cursor)
+	log.Append(ctx, Once("banana"))
+	log.Append(ctx, Once("pear"))
+	log.Append(ctx, Once("banana"))
+	read(ctx, cursor)
+	read(ctx, cursor)
+	read(ctx, cursor)
 
 	// Output:
 	// err: scroll.Done: no more entries
@@ -53,17 +55,18 @@ func ExampleFileLog() {
 
 	log := scroll.FileLog(file.Name())
 	cursor := log.Cursor()
+	ctx := context.Background()
 
-	read(cursor)
-	log.Append(Once("peach"))
-	read(cursor)
+	read(ctx, cursor)
+	log.Append(ctx, Once("peach"))
+	read(ctx, cursor)
 
-	log.Append(Once("banana"))
-	log.Append(Once("pear"))
-	log.Append(Once("banana"))
-	read(cursor)
-	read(cursor)
-	read(cursor)
+	log.Append(ctx, Once("banana"))
+	log.Append(ctx, Once("pear"))
+	log.Append(ctx, Once("banana"))
+	read(ctx, cursor)
+	read(ctx, cursor)
+	read(ctx, cursor)
 
 	// Output:
 	// err: scroll.Done: no more entries

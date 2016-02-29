@@ -29,18 +29,9 @@ type dbCursor struct {
 func DatastoreLog(ctx context.Context, entity string) Log {
 	q := datastore.NewQuery(entity).Order("Order")
 	return &dbLog{
-		Entity:  entity,
-		Query:   q,
-		Context: ctx,
+		Entity: entity,
+		Query:  q,
 	}
-}
-
-func (m *dbLog) SetContext(ctx context.Context) error {
-	m.Lock()
-	defer m.Unlock()
-
-	m.Context = ctx
-	return nil
 }
 
 func (m *dbLog) Cursor() Cursor {
@@ -49,14 +40,14 @@ func (m *dbLog) Cursor() Cursor {
 	}
 }
 
-func (c *dbCursor) Next(x interface{}) error {
+func (c *dbCursor) Next(ctx context.Context, x interface{}) error {
 	c.Log.Lock()
 	defer c.Log.Unlock()
 
 	if len(c.Pending) == 0 {
 		c.Pending = make([]Operation, 0)
 		q := c.Log.Query.Filter("Order >", c.LastTime).Limit(1000)
-		_, err := q.GetAll(c.Log.Context, &c.Pending)
+		_, err := q.GetAll(ctx, &c.Pending)
 		if err != nil {
 			return err
 		} else if len(c.Pending) == 0 {
@@ -69,7 +60,7 @@ func (c *dbCursor) Next(x interface{}) error {
 	return json.Unmarshal(op.Data, x)
 }
 
-func (m *dbLog) Append(x interface{}) error {
+func (m *dbLog) Append(ctx context.Context, x interface{}) error {
 	m.Lock()
 	defer m.Unlock()
 
@@ -83,7 +74,7 @@ func (m *dbLog) Append(x interface{}) error {
 	if uniq, ok := x.(Unique); ok {
 		name = uniq.Key()
 	}
-	key := datastore.NewKey(m.Context, m.Entity, name, 0, nil)
-	_, err = datastore.Put(m.Context, key, ent)
+	key := datastore.NewKey(ctx, m.Entity, name, 0, nil)
+	_, err = datastore.Put(ctx, key, ent)
 	return err
 }

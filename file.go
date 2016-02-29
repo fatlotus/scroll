@@ -36,10 +36,12 @@ func FileLog(path string) Log {
 		Encoder:   gob.NewEncoder(fp),
 	}
 
+	ctx := context.Background()
+
 	var record interface{}
 	cursor := log.Cursor().(*fileCursor)
 	for {
-		if err := cursor.Next(&record); err != nil {
+		if err := cursor.Next(ctx, &record); err != nil {
 			if err == Done {
 				break
 			}
@@ -55,10 +57,6 @@ func FileLog(path string) Log {
 	return log
 }
 
-func (l *fileLog) SetContext(c context.Context) error {
-	return nil
-}
-
 func (l *fileLog) Cursor() Cursor {
 	fp, err := os.Open(l.Path)
 	if err != nil {
@@ -67,7 +65,7 @@ func (l *fileLog) Cursor() Cursor {
 	return &fileCursor{l, gob.NewDecoder(fp), 0}
 }
 
-func (c *fileCursor) Next(x interface{}) error {
+func (c *fileCursor) Next(ctx context.Context, x interface{}) error {
 	l := c.Log
 
 	l.Lock()
@@ -93,7 +91,7 @@ func (c *fileCursor) Next(x interface{}) error {
 	return Done
 }
 
-func (l *fileLog) Append(record interface{}) error {
+func (l *fileLog) Append(c context.Context, record interface{}) error {
 	l.Lock()
 	defer l.Unlock()
 
