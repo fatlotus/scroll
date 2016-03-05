@@ -26,7 +26,7 @@ type dbCursor struct {
 	Pending  []Operation
 }
 
-func DatastoreLog(ctx context.Context, entity string) Log {
+func DatastoreLog(entity string) Log {
 	q := datastore.NewQuery(entity).Order("Order")
 	return &dbLog{
 		Entity: entity,
