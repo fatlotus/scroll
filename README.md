@@ -1,8 +1,11 @@
 # Scroll
 
-[![Circle CI](https://img.shields.io/github/issues/fatlotus/scroll.svg)
-[![Coveralls](https://img.shields.io/coveralls/fatlotus/scroll.svg
-)](https://coveralls.io/github/fatlotus/scroll)
+[![Circle CI](https://img.shields.io/circleci/project/fatlotus/scroll.svg)
+](https://circleci.com/gh/fatlotus/scroll)
+[![Github Issues](https://img.shields.io/github/issues/fatlotus/scroll.svg)
+](https://github.com/fatlotus/scroll/issues)
+[![Coveralls](https://img.shields.io/coveralls/fatlotus/scroll.svg)
+](https://coveralls.io/github/fatlotus/scroll)
 
 ```go
 import "github.com/fatlotus/scroll"
