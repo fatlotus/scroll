@@ -1,5 +1,13 @@
 # Scroll
 
+[![Circle CI](https://img.shields.io/github/issues/fatlotus/scroll.svg
+[![Coveralls](https://img.shields.io/coveralls/fatlotus/scroll.svg
+)](https://coveralls.io/github/fatlotus/scroll)
+
+```go
+import "github.com/fatlotus/scroll"
+```
+
 Scroll is a lightweight log structured database; essentially, it can be
 thought of as a distributed implementation []interface{} with fast (and
 cheap) scans.
