@@ -1,6 +1,6 @@
 # Scroll
 
-[![Circle CI](https://img.shields.io/github/issues/fatlotus/scroll.svg
+[![Circle CI](https://img.shields.io/github/issues/fatlotus/scroll.svg)
 [![Coveralls](https://img.shields.io/coveralls/fatlotus/scroll.svg
 )](https://coveralls.io/github/fatlotus/scroll)
 
