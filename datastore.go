@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine/datastore"
+	"strings"
 	"sync"
 	"time"
 )
 
-type Operation struct {
-	Data  []byte
+type operation struct {
+	Data  []string
 	Order time.Time
 }
 
@@ -23,9 +24,14 @@ type dbLog struct {
 type dbCursor struct {
 	LastTime time.Time
 	Log      *dbLog
-	Pending  []Operation
+	Pending  []operation
 }
 
+// A DatastoreLog is a Log stored on the Google App Engine Datastore, a
+// wrapper around BigTable.
+//
+//  Cost of log.Append: ~(2 + 0.001 * size of gob payload in bytes) writes.
+//  Cost of cursor.Next: ~(0.001) reads.
 func DatastoreLog(entity string) Log {
 	q := datastore.NewQuery(entity).Order("Order")
 	return &dbLog{
@@ -45,7 +51,7 @@ func (c *dbCursor) Next(ctx context.Context, x interface{}) error {
 	defer c.Log.Unlock()
 
 	if len(c.Pending) == 0 {
-		c.Pending = make([]Operation, 0)
+		c.Pending = make([]operation, 0)
 		q := c.Log.Query.Filter("Order >", c.LastTime).Limit(1000)
 		_, err := q.GetAll(ctx, &c.Pending)
 		if err != nil {
@@ -57,7 +63,7 @@ func (c *dbCursor) Next(ctx context.Context, x interface{}) error {
 
 	op := c.Pending[0]
 	c.Pending, c.LastTime = c.Pending[1:], op.Order
-	return json.Unmarshal(op.Data, x)
+	return json.Unmarshal([]byte(strings.Join(op.Data, "")), x)
 }
 
 func (m *dbLog) Append(ctx context.Context, x interface{}) error {
@@ -68,7 +74,11 @@ func (m *dbLog) Append(ctx context.Context, x interface{}) error {
 	if err != nil {
 		return err
 	}
-	ent := &Operation{data, time.Now()}
+	fragments := make([]string, 0)
+	for i := 0; i < len(data); i += 1024 {
+		fragments = append(fragments, string(data[i:i+1024]))
+	}
+	ent := &operation{fragments, time.Now()}
 	name := ""
 
 	if uniq, ok := x.(Unique); ok {

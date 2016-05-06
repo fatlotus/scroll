@@ -1,77 +1,65 @@
-package scroll_test
+package scroll
 
 import (
-	"encoding/gob"
-	"fmt"
-	"github.com/fatlotus/scroll"
 	"golang.org/x/net/context"
 	"io/ioutil"
 	"os"
+	"testing"
 )
 
-func read(ctx context.Context, c scroll.Cursor) {
-	var x Once
-	err := c.Next(ctx, &x)
-	if err != nil {
-		fmt.Printf("err: %s\n", err)
-	} else {
-		fmt.Printf("read: %s\n", x)
+type Entity string
+
+func (r Entity) Key() string { return string(r) }
+
+func RunCursor(t *testing.T, c context.Context, cur Cursor, e []string) {
+	var record Entity
+	for i := 0; i < len(e); i++ {
+		err := cur.Next(c, &record)
+		if err != nil {
+			t.Errorf("got unexpected error: %s\n", err)
+		} else if string(record) != e[i] {
+			t.Errorf("expecting %s, got %s\n", e[i], record)
+		}
+	}
+	if err := cur.Next(c, &record); err != Done {
+		t.Errorf("got (%s, err=%s), expecting end of list.\n", record, err)
 	}
 }
 
-type Once string
+func RunLog(t *testing.T, ctx context.Context, l Log) {
+	// Test normal insertion.
+	c := l.Cursor()
+	RunCursor(t, ctx, c, []string{})
+	l.Append(ctx, Entity("strawberry"))
+	l.Append(ctx, Entity("banana"))
+	RunCursor(t, ctx, c, []string{"strawberry", "banana"})
 
-func (o Once) Key() string { return string(o) }
+	// Test duplicated unique keys.
+	l.Append(ctx, Entity("pear"))
+	l.Append(ctx, Entity("pear"))
+	l.Append(ctx, Entity("grape"))
+	RunCursor(t, ctx, c, []string{"pear", "grape"})
 
-func ExampleMemoryLog() {
-	log := scroll.MemoryLog()
-	cursor := log.Cursor()
-	ctx := context.Background()
+	// Test re-ordering keys.
+	l.Append(ctx, Entity("pear"))
+	RunCursor(t, ctx, c, []string{"pear"})
 
-	read(ctx, cursor)
-	log.Append(ctx, Once("peach"))
-	read(ctx, cursor)
-
-	log.Append(ctx, Once("banana"))
-	log.Append(ctx, Once("pear"))
-	log.Append(ctx, Once("banana"))
-	read(ctx, cursor)
-	read(ctx, cursor)
-	read(ctx, cursor)
-
-	// Output:
-	// err: scroll.Done: no more entries
-	// read: peach
-	// read: pear
-	// read: banana
-	// err: scroll.Done: no more entries
+	c = l.Cursor()
+	RunCursor(t, ctx, c, []string{"strawberry", "banana", "grape", "pear"})
 }
 
-func ExampleFileLog() {
-	gob.Register(Once(""))
-
-	file, _ := ioutil.TempFile("", "")
-	defer os.Remove(file.Name())
-
-	log := scroll.FileLog(file.Name())
-	cursor := log.Cursor()
+func TestMemoryLog(t *testing.T) {
 	ctx := context.Background()
+	RunLog(t, ctx, MemoryLog())
+}
 
-	read(ctx, cursor)
-	log.Append(ctx, Once("peach"))
-	read(ctx, cursor)
-
-	log.Append(ctx, Once("banana"))
-	log.Append(ctx, Once("pear"))
-	log.Append(ctx, Once("banana"))
-	read(ctx, cursor)
-	read(ctx, cursor)
-	read(ctx, cursor)
-
-	// Output:
-	// err: scroll.Done: no more entries
-	// read: peach
-	// read: pear
-	// read: banana
-	// err: scroll.Done: no more entries
+func TestFileLog(t *testing.T) {
+	ctx := context.Background()
+	fp, err := ioutil.TempFile("", "")
+	if err != nil {
+		panic(err)
+	}
+	defer os.Remove(fp.Name())
+	defer fp.Close()
+	RunLog(t, ctx, FileLog(fp.Name()))
 }

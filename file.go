@@ -23,6 +23,7 @@ type fileCursor struct {
 	Offset  int
 }
 
+// A FileLog uses the given append-only file on disk to represent log updates.
 func FileLog(path string) Log {
 	fp, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {

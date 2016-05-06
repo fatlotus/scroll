@@ -17,6 +17,8 @@ type memCursor struct {
 	Offset int
 }
 
+// A MemoryLog is an in-memory representation of a log. Primarily it is useful
+// for unit tests.
 func MemoryLog() Log {
 	return &memLog{
 		Objects:   make([]interface{}, 0),
