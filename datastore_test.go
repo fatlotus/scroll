@@ -1,4 +1,18 @@
-package scroll_test
+package scroll
+
+import (
+	"google.golang.org/appengine/aetest"
+	"testing"
+)
+
+func TestDatastoreLog(t *testing.T) {
+	ctx, done, err := aetest.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	RunLog(t, ctx, DatastoreLog("Entity"))
+	done()
+}
 
 // import (
 // 	"github.com/uchicago-sg/scroll"

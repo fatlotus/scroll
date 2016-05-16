@@ -1,30 +1,31 @@
 package scroll
 
 import (
-	"encoding/json"
+	"bytes"
+	"encoding/gob"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine/datastore"
-	"strings"
 	"sync"
 	"time"
 )
 
 type operation struct {
-	Data  []string
+	Data  []datastore.ByteString
 	Order time.Time
 }
 
 type dbLog struct {
 	Entity  string
-	Query   *datastore.Query
 	Context context.Context
 	sync.Mutex
 }
 
 type dbCursor struct {
-	LastTime time.Time
-	Log      *dbLog
-	Pending  []operation
+	LastOp      *operation
+	LastKey     *datastore.Key
+	Log         *dbLog
+	Pending     []operation
+	PendingKeys []*datastore.Key
 }
 
 // A DatastoreLog is a Log stored on the Google App Engine Datastore, a
@@ -33,10 +34,8 @@ type dbCursor struct {
 //  Cost of log.Append: ~(2 + 0.001 * size of gob payload in bytes) writes.
 //  Cost of cursor.Next: ~(0.001) reads.
 func DatastoreLog(entity string) Log {
-	q := datastore.NewQuery(entity).Order("Order")
 	return &dbLog{
 		Entity: entity,
-		Query:  q,
 	}
 }
 
@@ -46,37 +45,81 @@ func (m *dbLog) Cursor() Cursor {
 	}
 }
 
+func (c *dbCursor) fetchMore(ctx context.Context) (err error) {
+	if len(c.Pending) > 0 {
+		return
+	}
+
+	a := datastore.NewKey(ctx, c.Log.Entity, "root", 0, nil)
+	q := datastore.NewQuery(c.Log.Entity).Order("Order").Ancestor(a)
+	if c.LastOp != nil {
+		q = q.Filter("Order >", c.LastOp.Order)
+	}
+
+	c.PendingKeys, err = q.Limit(1000).GetAll(ctx, &c.Pending)
+	if len(c.Pending) == 0 {
+		return Done
+	}
+	return
+}
+
+func (c *dbCursor) skipDups() {
+	for i, _ := range c.Pending {
+		if !c.PendingKeys[i].Equal(c.LastKey) {
+			c.Pending = c.Pending[i:]
+			c.PendingKeys = c.PendingKeys[i:]
+			return
+		}
+	}
+
+	c.PendingKeys = c.PendingKeys[:0]
+	c.Pending = c.Pending[:0]
+}
+
 func (c *dbCursor) Next(ctx context.Context, x interface{}) error {
 	c.Log.Lock()
 	defer c.Log.Unlock()
 
-	if len(c.Pending) == 0 {
-		c.Pending = make([]operation, 0)
-		q := c.Log.Query.Filter("Order >", c.LastTime).Limit(1000)
-		_, err := q.GetAll(ctx, &c.Pending)
-		if err != nil {
+	for len(c.Pending) == 0 {
+		if err := c.fetchMore(ctx); err != nil {
 			return err
-		} else if len(c.Pending) == 0 {
-			return Done
 		}
+		c.skipDups()
 	}
 
-	op := c.Pending[0]
-	c.Pending, c.LastTime = c.Pending[1:], op.Order
-	return json.Unmarshal([]byte(strings.Join(op.Data, "")), x)
+	// ensure we skip this key next time
+	c.LastOp, c.Pending = &c.Pending[0], c.Pending[1:]
+	c.LastKey, c.PendingKeys = c.PendingKeys[0], c.PendingKeys[1:]
+
+	// process the record contents
+	buf := &bytes.Buffer{}
+	for _, chunk := range c.LastOp.Data {
+		buf.Write(chunk)
+	}
+	err := gob.NewDecoder(buf).Decode(x)
+	if err != nil {
+		panic(err)
+	}
+	return err
 }
 
 func (m *dbLog) Append(ctx context.Context, x interface{}) error {
 	m.Lock()
 	defer m.Unlock()
 
-	data, err := json.Marshal(x)
-	if err != nil {
+	buf := &bytes.Buffer{}
+	if err := gob.NewEncoder(buf).Encode(x); err != nil {
 		return err
 	}
-	fragments := make([]string, 0)
-	for i := 0; i < len(data); i += 1024 {
-		fragments = append(fragments, string(data[i:i+1024]))
+
+	fragments := make([]datastore.ByteString, 0)
+	chunk := make([]byte, 1024)
+	for {
+		n, _ := buf.Read(chunk)
+		fragments = append(fragments, chunk[:n])
+		if n <= 0 {
+			break
+		}
 	}
 	ent := &operation{fragments, time.Now()}
 	name := ""
@@ -84,7 +127,12 @@ func (m *dbLog) Append(ctx context.Context, x interface{}) error {
 	if uniq, ok := x.(Unique); ok {
 		name = uniq.Key()
 	}
-	key := datastore.NewKey(ctx, m.Entity, name, 0, nil)
-	_, err = datastore.Put(ctx, key, ent)
+
+	a := datastore.NewKey(ctx, m.Entity, "root", 0, nil)
+	key := datastore.NewKey(ctx, m.Entity, name, 0, a)
+	_, err := datastore.Put(ctx, key, ent)
+	if err != nil {
+		panic(err)
+	}
 	return err
 }
